@@ -429,33 +429,116 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ============ CALLBACKS ============
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def generate_with_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """Generate email with user ID parameter"""
     try:
-        query = update.callback_query
+        # ইউজার ডেটা চেক করুন
+        user_data = db.get_user(user_id)
         
-        # ✅ FIX: টাইমআউট কমানো
-        try:
-            await query.answer()
-        except Exception as e:
-            logger.warning(f"Failed to answer callback query: {e}")
-            # উপেক্ষা করুন, চালিয়ে যান
+        if not user_data:
+            if update.message:
+                await update.message.reply_text("❌ Use /start first.")
+            elif update.callback_query:
+                await update.callback_query.message.reply_text("❌ Use /start first.")
+            return
+        
+        if user_data['status'] != 'approved':
+            if update.message:
+                await update.message.reply_text("⏳ Your account is pending approval.")
+            elif update.callback_query:
+                await update.callback_query.message.reply_text("⏳ Your account is pending approval.")
+            return
+        
+        balance = user_data['balance']
+        price = float(db.get_setting('price_per_email') or 5)
+        
+        if balance < price:
+            if update.message:
+                await update.message.reply_text(f"❌ Insufficient balance! Need ${price:.2f}, you have ${balance:.2f}")
+            elif update.callback_query:
+                await update.callback_query.message.reply_text(f"❌ Insufficient balance! Need ${price:.2f}, you have ${balance:.2f}")
+            return
+        
+        # রেসপন্স পাঠান
+        if update.message:
+            await update.message.reply_text("⏳ Generating .edu email... Please wait 2-5 minutes.")
+        elif update.callback_query:
+            await update.callback_query.message.reply_text("⏳ Generating .edu email... Please wait 2-5 minutes.")
+        
+        # ব্যাকগ্রাউন্ড থ্রেডিং
+        def background_generation():
+            try:
+                result = generator.generate()
+                if result['status'] == 'success':
+                    db.update_balance(user_id, -price)
+                    db.add_email(user_id, result['email'], result['password'], result['student_id'])
+                    
+                    # সফল রেসপন্স পাঠান
+                    success_message = f"""
+✅ **Email Generated Successfully!**
 
-        # ✅ FIX: user_id সংরক্ষণ করুন
-        user_id = None
-        if query.from_user:
-            user_id = query.from_user.id
+📧 **Email:** `{result['email']}`
+🔑 **Password:** `{result['password']}`
+🆔 **Student ID:** `{result['student_id']}`
+💰 **Price:** ${price:.2f}
+💸 **Remaining Balance:** ${balance - price:.2f}
+
+⚠️ **Important:**
+- এই ইমেইল এবং পাসওয়ার্ড সংরক্ষণ করুন
+- যত তাড়াতাড়ি সম্ভব লগইন করুন
+- পাসওয়ার্ড পরিবর্তন করুন
+                    """
+                    
+                    try:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(
+                            context.bot.send_message(
+                                chat_id=user_id,
+                                text=success_message,
+                                parse_mode='Markdown'
+                            )
+                        )
+                        loop.close()
+                    except Exception as e:
+                        logger.error(f"Error sending message to user: {e}")
+                else:
+                    # এরর রেসপন্স পাঠান
+                    error_message = f"""
+❌ **Email Generation Failed**
+
+❌ **Error:** {result.get('error', 'Unknown error')}
+
+⚠️ **দয়া করে আবার চেষ্টা করুন**
+                    """
+                    
+                    try:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(
+                            context.bot.send_message(
+                                chat_id=user_id,
+                                text=error_message,
+                                parse_mode='Markdown'
+                            )
+                        )
+                        loop.close()
+                    except Exception as e:
+                        logger.error(f"Error sending error message to user: {e}")
+            except Exception as e:
+                logger.error(f"Error in background generation: {e}")
         
-        if query.data == "generate":
-            # ✅ FIX: user_id প্যারামিটার হিসেবে পাস করুন
-            await generate_with_user_id(update, context, user_id)
-        elif query.data == "status":
-            await status_cmd(update, context)
-        elif query.data == "balance":
-            await balance_cmd(update, context)
-        elif query.data == "help":
-            await query.message.reply_text(HELP_MESSAGE, parse_mode='Markdown')
+        # ব্যাকগ্রাউন্ড থ্রেড চালু করুন
+        threading.Thread(target=background_generation, daemon=True).start()
+        return
+        
     except Exception as e:
-        logger.error(f"Error in button_callback: {e}")
+        logger.error(f"Error in generate_with_user_id: {e}")
+        if update.message:
+            await update.message.reply_text("❌ An error occurred. Please try again.")
+        elif update.callback_query:
+            await update.callback_query.message.reply_text("❌ An error occurred. Please try again.")
+
         # উপেক্ষা করুন, চালিয়ে যান
 
 
