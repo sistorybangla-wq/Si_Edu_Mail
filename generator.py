@@ -1,6 +1,7 @@
 """
 generator.py - Edu Email Generator
 """
+
 import time
 import random
 import logging
@@ -8,11 +9,9 @@ from faker import Faker
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 fake = Faker()
 
 class EduEmailGenerator:
@@ -25,12 +24,15 @@ class EduEmailGenerator:
         options.add_argument('--disable-gpu')
         options.add_argument('--window-size=1920,1080')
         
+        # Railway-এর জন্য Chrome path সেট করুন
+        options.binary_location = '/usr/bin/chromium'
+        
         try:
-            service = Service(ChromeDriverManager().install())
+            service = Service('/usr/bin/chromedriver')
             driver = webdriver.Chrome(service=service, options=options)
             
             # YAHAN APNA ACTUAL SELENIUM LOGIC DAALO (Login, Form Fill, etc.)
-            # Example: driver.get("https://mylu.liberty.edu")
+            # Example: driver.get("https://mylu.liberty.edu/")
             # time.sleep(5)
             # ...
             
@@ -39,6 +41,7 @@ class EduEmailGenerator:
             
             # ✅ সঠিক .edu ইমেইল জেনারেট করুন
             edu_domains = [
+                "liberty.edu",
                 "example.edu",
                 "university.edu",
                 "college.edu",
@@ -54,7 +57,12 @@ class EduEmailGenerator:
             # ইউজারনেম জেনারেট করুন
             first_name = fake.first_name().lower()
             last_name = fake.last_name().lower()
-            username = f"{first_name}{last_name}"
+            
+            # ✅ FIX: None চেক করুন
+            if first_name is not None and last_name is not None:
+                username = f"{first_name}{last_name}"
+            else:
+                username = f"student{random.randint(1000, 9999)}"
             
             # .edu ডোমেইন সিলেক্ট করুন
             domain = random.choice(edu_domains)
@@ -80,7 +88,6 @@ class EduEmailGenerator:
                 'student_id': student_id,
                 'full_name': full_name
             }
-            
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             return {
