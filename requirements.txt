@@ -7,3 +7,6 @@ faker==20.1.0
 flask==3.0.0
 gunicorn==21.2.0
 aiohttp==3.9.0
+selenium==4.15.2
+webdriver-manager==4.0.1
+faker==20.1.0
