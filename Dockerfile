@@ -17,5 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy code
 COPY . .
 
-# Run bot
-CMD ["python", "main.py"]
+# Expose port for health check
+EXPOSE 8080
+
+# Run both health check and bot
+CMD ["python", "-c", "import threading; import subprocess; import time; t1 = threading.Thread(target=lambda: subprocess.run(['python', 'app.py'])); t1.start(); time.sleep(2); subprocess.run(['python', 'main.py'])"]
