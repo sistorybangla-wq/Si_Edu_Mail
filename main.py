@@ -128,10 +128,15 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - পাসওয়ার্ড পরিবর্তন করুন
                     """
                     
-                    # ✅ FIX: context.bot ব্যবহার করুন
+                    # ✅ FIX: Event Loop প্রব্লেম সমাধান করুন
                     try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
+                        # মেইন Event Loop থেকে মেসেজ পাঠান
+                        loop = asyncio.get_event_loop()
+                        if loop.is_closed():
+                            # যদি loop বন্ধ হয়, নতুন loop তৈরি করুন
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        
                         loop.run_until_complete(
                             context.bot.send_message(
                                 chat_id=user_id,
@@ -139,7 +144,23 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 parse_mode='Markdown'
                             )
                         )
-                        loop.close()
+                    except RuntimeError as e:
+                        # Event Loop বন্ধ হলে লগ করুন
+                        logger.error(f"Event loop closed error: {e}")
+                        # নতুন Event Loop তৈরি করে আবার চেষ্টা করুন
+                        try:
+                            new_loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(new_loop)
+                            new_loop.run_until_complete(
+                                context.bot.send_message(
+                                    chat_id=user_id,
+                                    text=success_message,
+                                    parse_mode='Markdown'
+                                )
+                            )
+                            new_loop.close()
+                        except Exception as e2:
+                            logger.error(f"Error sending message after retry: {e2}")
                     except Exception as e:
                         logger.error(f"Error sending message to user: {e}")
                 else:
@@ -153,8 +174,11 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     """
                     
                     try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
+                        loop = asyncio.get_event_loop()
+                        if loop.is_closed():
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        
                         loop.run_until_complete(
                             context.bot.send_message(
                                 chat_id=user_id,
@@ -162,7 +186,21 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 parse_mode='Markdown'
                             )
                         )
-                        loop.close()
+                    except RuntimeError as e:
+                        logger.error(f"Event loop closed error: {e}")
+                        try:
+                            new_loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(new_loop)
+                            new_loop.run_until_complete(
+                                context.bot.send_message(
+                                    chat_id=user_id,
+                                    text=error_message,
+                                    parse_mode='Markdown'
+                                )
+                            )
+                            new_loop.close()
+                        except Exception as e2:
+                            logger.error(f"Error sending error message after retry: {e2}")
                     except Exception as e:
                         logger.error(f"Error sending error message to user: {e}")
             except Exception as e:
